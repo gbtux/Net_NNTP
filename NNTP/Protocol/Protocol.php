@@ -68,13 +68,12 @@ define('NET_NNTP_PROTOCOL_DEFAULT_PORT', '119');
 
 /**
  * The Net_NNTP_Protocol class implements the NNTP standard acording to
- * RFX 977, RFC 2980, RFC 850/1036
-, and RFC 822/2822
+ * RFX 977, RFC 2980, RFC 850/1036, and RFC 822/2822
  *
  * @version 0.0.1
  * @author Heino H. Gehlsen <heino@gehlsen.dk>
  */
-class Net_NNTP_Protocol extends PEAR
+class Net_NNTP_Protocol
 {
     // {{{ properties
 
@@ -94,6 +93,14 @@ class Net_NNTP_Protocol extends PEAR
      */
     var $_currentStatusResponse = null;
 
+    /**
+     * Whether to enable internal debug messages.
+     *
+     * @var     bool
+     * @access  private
+     */
+    var $_debug = false;
+
     // }}}
     // {{{ constructor
 	    
@@ -101,8 +108,6 @@ class Net_NNTP_Protocol extends PEAR
      *
      */
     function Net_NNTP_Protocol() {
-	parent::PEAR();
-	
 	$this->_socket = new Net_Socket();
     }
 
@@ -126,7 +131,7 @@ class Net_NNTP_Protocol extends PEAR
 
 	// Open Connection
 	$R = @$this->_socket->connect($host, $port, false, 15);
-	if ($this->isError($R)) {
+	if (PEAR::isError($R)) {
 	    return PEAR::throwError('Could not connect to the server', null, $R->getMessage());
 	}
 
@@ -610,7 +615,12 @@ class Net_NNTP_Protocol extends PEAR
      */
     function cmdListNewsgroups($wildmat = '')
     {
-        $response = $this->_sendCommand('LIST NEWSGROUPS '.$wildmat);
+        if (empty($wildmat)) {
+            $command = 'LIST NEWSGROUPS';
+        } else {
+            $command = 'LIST NEWSGROUPS '.$wildmat;
+        }
+        $response = $this->_sendCommand($command);
         if (PEAR::isError($response)){
             return $response;
         }
@@ -967,7 +977,7 @@ class Net_NNTP_Protocol extends PEAR
      */
     function isConnected()
     {
-	return (is_resource($this->_socket->fp) && !feof($this->_socket->fp));
+	return (is_resource($this->_socket->fp) && (!$this->_socket->eof()));
     }
 
     // }}}
@@ -1046,41 +1056,54 @@ class Net_NNTP_Protocol extends PEAR
     function _getTextResponse()
     {
         $data = array();
+        $line = '';
 	
+        // Continue until connection is lost
         while(!$this->_socket->eof()) {
 
-	    // Retrieve a line (terminated by "\r\n") from the server.
-            $line = $this->_socket->gets(1024); // Lines may not be longer than 988+2 chars (RFC2822 2.3) 
-    	    if (PEAR::isError($line) ) {
-        	return PEAR::throwError( 'Failed to read from socket!', null, $line->getMessage());
+            // Retrieve and append up to 1024 characters from the server.
+            $line .= $this->_socket->gets(1024); 
+            if (PEAR::isError($line) ) {
+                return PEAR::throwError( 'Failed to read from socket!', null, $line->getMessage());
     	    }
 	    
-	    // Verify recieved line
-	    if (strlen($line) < 2 || substr($line, -2) != "\r\n") {
-        	return PEAR::throwError('Invalid line recieved!', null);
-	    }
-
-	    // Check if line terminates the textresponse
-            if ($line == ".\r\n") {
-        	// return all previous lines
-		return $data;
-                break;
+            // Continue if the line is not terminated by CRLF
+            if (substr($line, -2) != "\r\n" || strlen($line) < 2) {
+                continue;
             }
 
-	    // Remove "\r\n" from the end of the line
-	    $line = substr($line, 0, -2);
+            // Validate recieved line
+            if (false) {
+                // Lines should/may not be longer than 998+2 chars (RFC2822 2.3)
+                if (strlen($line) > 1000) {
+                    return PEAR::throwError('Invalid line recieved!', null);
+                }
+            }
+
+            // Remove CRLF from the end of the line
+            $line = substr($line, 0, -2);
+
+            // Check if the line terminates the textresponse
+            if ($line == '.') {
+                // return all previous lines
+                return $data;
+                break;
+            }
 
             // If 1st char is '.' it's doubled (NNTP/RFC977 2.4.1)
             if (substr($line, 0, 2) == '..') {
                 $line = substr($line, 1);
-	    }
+            }
             
             // Add the line to the array of lines
             $data[] = $line;
+
+            // Reset/empty $line
+            $line = '';
         }
 
     	return PEAR::throwError('Data stream not terminated with period', null);
-     }
+    }
 
     // }}}
     // {{{ _sendCommand()
@@ -1096,7 +1119,8 @@ class Net_NNTP_Protocol extends PEAR
      */
     function _sendCommand($cmd)
     {
-        if (!strlen($cmd) > 510) { // NNTP/RFC977 only allows command up to 512 (-2) chars.
+        // NNTP/RFC977 only allows command up to 512 (-2) chars.
+        if (!strlen($cmd) > 510) {
             return PEAR::throwError('Failed to write to socket! (Command to long - max 510 chars)');
         }
 
