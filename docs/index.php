@@ -3,7 +3,7 @@
 // +----------------------------------------------------------------------+
 // | PHP Version 4                                                        |
 // +----------------------------------------------------------------------+
-// | Copyright (c) 1997-2002 The PHP Group                                |
+// | Copyright (c) 1997-2003 The PHP Group                                |
 // +----------------------------------------------------------------------+
 // | This source file is subject to version 2.0 of the PHP license,       |
 // | that is bundled with this package in the file LICENSE, and is        |
@@ -18,7 +18,6 @@
 // +----------------------------------------------------------------------+
 //
 // $Id$
-*/
 ?>
 <html>
 <head>
@@ -41,8 +40,9 @@ if( PEAR::isError($ret)) {
         echo '<a href="group.php?group='.urlencode($group['group']).
             '&writable='.urlencode($group['posting_allowed']).'">'.
             $group['group'].'</a>' ;
-        $msgcount =$group['last']-$group['first']; 
+        $msgcount = $group['last']-$group['first']; 
         echo '&nbsp;('.$msgcount.' messages)<br>';
+        echo $group['desc'].'<br><br>';
     }
     $nntp->quit();
 }    
