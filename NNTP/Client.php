@@ -383,7 +383,7 @@ class Net_NNTP_Client extends Net_NNTP_Protocol_Client
      */
     function getReferencesOverview($first, $last)
     {
-    	return $this->getReferences($first, $last)
+    	return $this->getReferences($first, $last);
     }
 
     // }}}
